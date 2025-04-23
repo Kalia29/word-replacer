@@ -1,34 +1,49 @@
 from flask import Flask, request, send_file
 from docx import Document
+import base64
+import io
 import json
 
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Word Replacer is running!"
+    return 'Word Replacer is running!'
 
 @app.route('/replace', methods=['POST'])
 def replace_words():
-    file = request.files['file']
-    file.save('input.docx')
+    data = request.get_json()
 
-    word_pairs = request.form.get('replacements')
-    if not word_pairs:
-        return "No replacements provided", 400
+    if not data:
+        return "Missing JSON body", 400
+
+    filename = data.get('filename')
+    file_content = data.get('file')
+    replacements = data.get('replacements')
+
+    if not file_content or not replacements:
+        return "Missing file content or replacements", 400
 
     try:
-        replacements = json.loads(word_pairs)
-    except:
-        return "Invalid JSON", 400
+        file_bytes = base64.b64decode(file_content)
+        file_stream = io.BytesIO(file_bytes)
+        doc = Document(file_stream)
+    except Exception as e:
+        return f"Failed to read Word doc: {str(e)}", 500
 
-    doc = Document('input.docx')
-    for paragraph in doc.paragraphs:
-        for old, new in replacements.items():
-            if old in paragraph.text:
-                paragraph.text = paragraph.text.replace(old, new)
+    try:
+        for paragraph in doc.paragraphs:
+            for old_word, new_word in replacements.items():
+                if old_word in paragraph.text:
+                    paragraph.text = paragraph.text.replace(old_word, new_word)
+    except Exception as e:
+        return f"Replacement error: {str(e)}", 500
 
-    doc.save('output.docx')
-    return send_file('output.docx', as_attachment=True)
+    output_stream = io.BytesIO()
+    doc.save(output_stream)
+    output_stream.seek(0)
 
-app.run(host='0.0.0.0', port=3000)
+    return send_file(output_stream, as_attachment=True, download_name='output.docx', mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=3000)
