@@ -1,49 +1,47 @@
-from flask import Flask, request, send_file
-from docx import Document
+from flask import Flask, request, jsonify
 import base64
-import io
-import json
+from io import BytesIO
+from docx import Document
 
 app = Flask(__name__)
 
-@app.route('/')
-def home():
-    return 'Word Replacer is running!'
-
 @app.route('/replace', methods=['POST'])
 def replace_words():
-    data = request.get_json()
-
-    if not data:
-        return "Missing JSON body", 400
-
-    filename = data.get('filename')
-    file_content = data.get('file')
-    replacements = data.get('replacements')
-
-    if not file_content or not replacements:
-        return "Missing file content or replacements", 400
-
     try:
-        file_bytes = base64.b64decode(file_content)
-        file_stream = io.BytesIO(file_bytes)
-        doc = Document(file_stream)
-    except Exception as e:
-        return f"Failed to read Word doc: {str(e)}", 500
+        data = request.get_json()
 
-    try:
+        # Step 1: Get fields
+        filename = data.get('filename', 'Output.docx')
+        replacements = data.get('replacements', {})
+        file_b64 = data.get('file')
+
+        if not file_b64:
+            return jsonify({"error": "Missing file content"}), 400
+
+        # Step 2: Decode and load Word document
+        file_bytes = base64.b64decode(file_b64)
+        doc = Document(BytesIO(file_bytes))
+
+        # Step 3: Replace text
         for paragraph in doc.paragraphs:
-            for old_word, new_word in replacements.items():
-                if old_word in paragraph.text:
-                    paragraph.text = paragraph.text.replace(old_word, new_word)
+            for key, val in replacements.items():
+                if key in paragraph.text:
+                    paragraph.text = paragraph.text.replace(key, val)
+
+        # Step 4: Save to memory
+        output_stream = BytesIO()
+        doc.save(output_stream)
+        output_b64 = base64.b64encode(output_stream.getvalue()).decode('utf-8')
+
+        # Step 5: Return result
+        return jsonify({
+            "filename": f"Updated_{filename}",
+            "file": output_b64
+        })
+
     except Exception as e:
-        return f"Replacement error: {str(e)}", 500
+        return jsonify({"error": str(e)}), 500
 
-    output_stream = io.BytesIO()
-    doc.save(output_stream)
-    output_stream.seek(0)
-
-    return send_file(output_stream, as_attachment=True, download_name='output.docx', mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-
-if __name__ == '__main__':
+# Keep the app running on port 3000 for Render
+if __name__ == "__main__":
     app.run(host='0.0.0.0', port=3000)
