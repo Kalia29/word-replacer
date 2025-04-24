@@ -3,6 +3,8 @@ from docx import Document
 import base64
 import io
 import json
+import zipfile
+import traceback
 
 app = Flask(__name__)
 
@@ -20,16 +22,21 @@ def replace_words():
         file_data = data.get('file')
         replacements = data.get('replacements', {})
 
-        # Ensure replacements is a dictionary
         if isinstance(replacements, str):
             replacements = json.loads(replacements)
 
         if not file_data:
             return jsonify({"error": "Missing file content"}), 400
 
+        # Decode base64 and load as Word document
         file_bytes = base64.b64decode(file_data)
-        doc = Document(io.BytesIO(file_bytes))
+        try:
+            doc = Document(io.BytesIO(file_bytes))
+        except zipfile.BadZipFile:
+            print("Invalid .docx file: not a ZIP")
+            return jsonify({"error": "Uploaded file is not a valid .docx file"}), 400
 
+        # Replace text in paragraphs
         for p in doc.paragraphs:
             for key, value in replacements.items():
                 if key in p.text:
@@ -43,9 +50,8 @@ def replace_words():
         return jsonify({"filename": filename, "file": encoded_result})
 
     except Exception as e:
-        import traceback
         print("ERROR:", traceback.format_exc())
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": traceback.format_exc()}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=3000)
