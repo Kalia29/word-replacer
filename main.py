@@ -26,9 +26,10 @@ def replace_words():
         doc = Document(io.BytesIO(file_bytes))
 
         for p in doc.paragraphs:
-            for key, value in replacements.items():
-                if key in p.text:
-                    p.text = p.text.replace(key, value)
+            for run in p.runs:
+                for key, value in replacements.items():
+                    if key in run.text:
+                        run.text = run.text.replace(key, value)
 
         output_stream = io.BytesIO()
         doc.save(output_stream)
@@ -39,7 +40,7 @@ def replace_words():
 
     except Exception as e:
         import traceback
-        print("ERROR:", traceback.format_exc())  # Logs full error in Render logs
+        print("ERROR:", traceback.format_exc())
         return jsonify({"error": str(e)}), 500
 
 
