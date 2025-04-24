@@ -2,45 +2,38 @@ from flask import Flask, request, jsonify
 from docx import Document
 import base64
 import io
-import os
 
 app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return 'Word Replacer is running!'
 
 @app.route('/replace', methods=['POST'])
 def replace_words():
     try:
-        # Get data from the request
         data = request.get_json()
-        filename = data.get('filename')
-        file_content = data.get('file')
-        replacements = data.get('replacements')
+        filename = data['filename']
+        file_data = base64.b64decode(data['file'])
+        replacements = data['replacements']
 
-        # Decode the base64 file
-        decoded_file = base64.b64decode(file_content)
-        docx_file = io.BytesIO(decoded_file)
+        doc = Document(io.BytesIO(file_data))
 
-        # Load and process the Word document
-        doc = Document(docx_file)
         for p in doc.paragraphs:
-            for old, new in replacements.items():
-                if old in p.text:
-                    p.text = p.text.replace(old, new)
+            for key, value in replacements.items():
+                if key in p.text:
+                    p.text = p.text.replace(key, value)
 
-        # Save updated file to memory
-        output = io.BytesIO()
-        doc.save(output)
-        output.seek(0)
-        encoded_output = base64.b64encode(output.read()).decode('utf-8')
+        # Save document to memory
+        output_stream = io.BytesIO()
+        doc.save(output_stream)
+        output_stream.seek(0)
+        encoded_result = base64.b64encode(output_stream.read()).decode("utf-8")
 
-        return jsonify({
-            'filename': filename,
-            'updated_file': encoded_output
-        })
+        return jsonify({"filename": filename, "file": encoded_result})
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
-# Required for Render to detect the app
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 3000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=3000)
