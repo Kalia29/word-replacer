@@ -13,18 +13,23 @@ def home():
 def replace_words():
     try:
         data = request.get_json()
-        filename = data['filename']
-        file_data = base64.b64decode(data['file'])
-        replacements = data['replacements']
+        print("Incoming JSON:", data)
 
-        doc = Document(io.BytesIO(file_data))
+        filename = data.get('filename', 'output.docx')
+        file_data = data.get('file')
+        replacements = data.get('replacements', {})
+
+        if not file_data:
+            return jsonify({"error": "Missing file content"}), 400
+
+        file_bytes = base64.b64decode(file_data)
+        doc = Document(io.BytesIO(file_bytes))
 
         for p in doc.paragraphs:
             for key, value in replacements.items():
                 if key in p.text:
                     p.text = p.text.replace(key, value)
 
-        # Save document to memory
         output_stream = io.BytesIO()
         doc.save(output_stream)
         output_stream.seek(0)
@@ -33,7 +38,10 @@ def replace_words():
         return jsonify({"filename": filename, "file": encoded_result})
 
     except Exception as e:
+        import traceback
+        print("ERROR:", traceback.format_exc())  # Logs full error in Render logs
         return jsonify({"error": str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=3000)
