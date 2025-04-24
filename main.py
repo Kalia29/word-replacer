@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from docx import Document
 import base64
 import io
+import json
 
 app = Flask(__name__)
 
@@ -19,6 +20,10 @@ def replace_words():
         file_data = data.get('file')
         replacements = data.get('replacements', {})
 
+        # Ensure replacements is a dictionary
+        if isinstance(replacements, str):
+            replacements = json.loads(replacements)
+
         if not file_data:
             return jsonify({"error": "Missing file content"}), 400
 
@@ -26,10 +31,9 @@ def replace_words():
         doc = Document(io.BytesIO(file_bytes))
 
         for p in doc.paragraphs:
-            for run in p.runs:
-                for key, value in replacements.items():
-                    if key in run.text:
-                        run.text = run.text.replace(key, value)
+            for key, value in replacements.items():
+                if key in p.text:
+                    p.text = p.text.replace(key, value)
 
         output_stream = io.BytesIO()
         doc.save(output_stream)
@@ -42,7 +46,6 @@ def replace_words():
         import traceback
         print("ERROR:", traceback.format_exc())
         return jsonify({"error": str(e)}), 500
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=3000)
